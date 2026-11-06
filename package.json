@@ -1,10 +1,16 @@
 {
   "name": "dsh-gb",
-  "version": "0.1.0-alpha.2",
+  "version": "0.2.0-alpha.1",
   "private": true,
   "type": "module",
   "main": "index.js",
-  "exports": { ".": "./index.js", "./mode": "./mode.js", "./package.json": "./package.json" },
+  "exports": {
+    ".": "./index.js",
+    "./mode": "./mode.js",
+    "./package.json": "./package.json",
+    "./client": "./client.js",
+    "./typert": "./typert.js"
+  },
   "files": [
     "index.js",
     "mode.js",
@@ -15,7 +21,15 @@
     "cordis.patch.yml",
     "gb.lock.json",
     "README.md",
-    "LICENSE"
+    "LICENSE",
+    "workbench.js",
+    "wire.js",
+    "typert.js",
+    "client.js",
+    "python/input_ops.py",
+    "python/model_ops.py",
+    "client-src.js",
+    "docs"
   ],
   "engines": {
     "dsh": "0.2.2-rc.1"
@@ -23,15 +37,27 @@
   "dsh": {
     "bundle": {
       "patch": "./cordis.patch.yml"
+    },
+    "client": {
+      "inject": [
+        "@deepseek-ai/dsh-api-remotes",
+        "@deepseek-ai/dsh-client-ui-settings"
+      ],
+      "platform": "web"
     }
   },
   "scripts": {
     "test": "node --test tests/*.test.js",
     "test:python": "python -m unittest discover -s tests -p test_*.py",
-    "setup:gb": "python scripts/setup_gb.py"
+    "setup:gb": "python scripts/setup_gb.py",
+    "build:client": "node scripts/build-client.js",
+    "prepack": "node scripts/build-client.js"
   },
   "peerDependencies": {
-    "@deepseek-ai/dsh-tools": "0.2.2-rc.1"
+    "@deepseek-ai/dsh-tools": "0.2.2-rc.1",
+    "@deepseek-ai/dsh-typert-protocol": "0.2.2-rc.1",
+    "@deepseek-ai/schemastery": "~3.19.0",
+    "zod": "^4.0.0"
   },
   "devDependencies": {
     "@deepseek-ai/dsh": "0.2.2-rc.1",

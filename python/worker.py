@@ -67,6 +67,7 @@ def dispatch(req):
         PREPROCESSING_METHODS, SELECTOR_METHODS, CLASSIFICATION_MODELS, REGRESSION_MODELS)
     from gb_core.data import load_dataset, split_dataset
     from gb_core.artifacts import source_provenance, dependency_versions
+    from input_ops import discover, columns, prepare
     import pandas as pd
 
     scope = req.get('scope', 'local')
@@ -76,6 +77,57 @@ def dispatch(req):
     storage.mkdir(parents=True, exist_ok=True)
     op = req['op']
     args = req.get('args', {})
+    if op == 'artifact':
+        import base64
+        if args.get('model_id'):
+            from model_ops import model_record
+            record = model_record(storage, args['model_id'], contained)
+            if args.get('kind') not in ('bundle', 'manifest'):
+                raise ValueError('Choose bundle or manifest.')
+            artifact = contained(storage, record[args['kind'] + '_path'])
+        elif args.get('prediction_id'):
+            if not re.fullmatch(r'[0-9a-f]{24}', args['prediction_id']):
+                raise ValueError('Invalid prediction identifier.')
+            artifact = contained(storage, storage / 'predictions' / args['prediction_id'] / 'predictions.csv')
+        else:
+            if not re.fullmatch(r'[0-9a-f]{24}', args.get('plan_id', '')):
+                raise ValueError('Invalid plan identifier.')
+            folder = contained(storage, storage / 'runs' / args['plan_id'])
+            artifact = contained(folder, folder / args['name'])
+            if artifact.suffix.lower() not in ('.csv', '.md', '.png', '.json') or artifact.name in ('state.json',):
+                raise ValueError('Only result tables, reports, figures and manifests may be read.')
+        if artifact.stat().st_size > 8 * 1024 * 1024:
+            raise ValueError('Browser downloads support up to 8 MiB; open the recorded local artifact path.')
+        return dict(name=artifact.name, base64=base64.b64encode(artifact.read_bytes()).decode('ascii'))
+    if op == 'status':
+        with tempfile.TemporaryFile(dir=storage) as probe:
+            probe.write(b'ready')
+        return dict(ready=True, python=sys.executable, python_version=sys.version.split()[0],
+                    gb_root=str(gb), workspace_root=str(root), dependencies=dependency_versions(),
+                    source=source_provenance(gb), output_writable=True)
+    if op == 'files':
+        return discover(root, args.get('directory', '.'), contained)
+    if op == 'columns':
+        return columns(contained(root, root / args['path']), args.get('sheet'))
+    if op == 'prepare':
+        return prepare(root, storage, args, contained, write_json)
+    if op == 'predict':
+        from model_ops import predict
+        return predict(root, storage, gb, args, contained, write_json)
+    if op == 'models':
+        from model_ops import model_record
+        records = []
+        for file in sorted((storage / 'models').glob('*.json'))[:100]:
+            records.append(model_record(storage, file.stem, contained))
+        return dict(models=records)
+    if op == 'history':
+        records = []
+        for file in sorted((storage / 'plans').glob('*.json'), key=lambda p: p.stat().st_mtime, reverse=True)[:100]:
+            saved = json.loads(contained(storage, file).read_text(encoding='utf-8'))
+            state = storage / 'runs' / file.stem / 'state.json'
+            records.append(dict(plan_id=file.stem, task=saved['settings']['task'], path=saved['data']['path'],
+                                candidates=saved['candidate_count'], state=json.loads(contained(storage, state).read_text(encoding='utf-8')) if state.exists() else dict(status='not_started')))
+        return dict(plans=records)
     if op in ('inspect', 'plan'):
         task = TaskType(args['task'])
         path = contained(root, root / args['path'])
@@ -100,6 +152,12 @@ def dispatch(req):
         info['target_column'] = 'Class' if task is TaskType.CLASSIFICATION else 'Target'
         info['feature_names_preview'] = [str(c) for c in dataset.features.columns[:16]]
         info['feature_names_truncated'] = len(dataset.features.columns) > 16
+        imported = path.parent / 'import.json'
+        if path.is_relative_to(storage / 'inputs') and imported.is_file():
+            from input_ops import digest
+            info['import'] = json.loads(contained(storage, imported).read_text(encoding='utf-8'))
+            if info['import']['normalized_sha256'] != digest(path):
+                raise ValueError('Mapped dataset changed; import again.')
         if op == 'inspect':
             return info
         mode = EvaluationMode(args.get('mode', 'exploration'))
@@ -156,13 +214,22 @@ def dispatch(req):
     state_path = run_dir / 'state.json'
     if op == 'results':
         state = json.loads(state_path.read_text(encoding='utf-8')) if state_path.exists() else {'status': 'not_started'}
-        result = {'plan_id': plan_id, 'state': state}
+        result = {'plan_id': plan_id, 'task': plan['settings']['task'], 'state': state}
         if state.get('status') in ('completed', 'completed_with_errors'):
             from gb_core.reporting import structured_summary
             from result_view import build_result_view
             result['summary'] = structured_summary(pd.read_csv(contained(run_dir, run_dir / 'leaderboard_v3.csv')), TaskType(plan['settings']['task']), top_n=5)
             result.update(build_result_view(run_dir, plan, state, result['summary'], write_report))
+            from model_ops import candidate_table
+            result['candidates'] = candidate_table(run_dir)
         return result
+    if op == 'export':
+        from model_ops import export_model
+        state = json.loads(state_path.read_text(encoding='utf-8')) if state_path.is_file() else {}
+        if state.get('status') not in ('completed', 'completed_with_errors'):
+            raise ValueError('Export requires a completed saved run.')
+        with run_lock(run_dir / 'worker.lock'):
+            return export_model(root, storage, gb, run_dir, plan, args, contained, write_json)
     if op != 'run':
         raise ValueError('Unsupported operation')
     dataset = load_dataset(contained(root, plan['data']['path']), TaskType(plan['settings']['task']))

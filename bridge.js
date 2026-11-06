@@ -9,6 +9,7 @@ export function scopeFor(agent) {
   return createHash('sha256').update(String(agent.id)).digest('hex').slice(0, 24);
 }
 export async function settings(config) {
+  config = Object.fromEntries(['pythonPath','gbRoot','workspaceRoot'].map(key => [key,typeof config[key]?.get === 'function' ? config[key].get() : config[key]]));
   if (!config.gbRoot || !config.workspaceRoot) throw new Error('Configure absolute gbRoot and workspaceRoot before using GB.');
   if (!isAbsolute(config.gbRoot) || !isAbsolute(config.workspaceRoot)) throw new Error('GB configuration paths must be absolute.');
   return { gbRoot: await realpath(config.gbRoot), workspaceRoot: await realpath(config.workspaceRoot), pythonPath: config.pythonPath || 'python' };
@@ -32,7 +33,7 @@ export async function startWorker(ctx, config, scope, op, args, signal, onEvent 
     child.stdout.setEncoding('utf8');
     for await (const chunk of child.stdout) {
       buffer += chunk;
-      if (buffer.length > 2 * 1024 * 1024) throw new Error('Worker protocol exceeded size limit');
+      if (buffer.length > 12 * 1024 * 1024) throw new Error('Worker protocol exceeded size limit');
       let end;
       while ((end = buffer.indexOf('\n')) >= 0) {
         const line = buffer.slice(0, end); buffer = buffer.slice(end + 1);

@@ -1,8 +1,15 @@
 import { defineTool } from '@deepseek-ai/dsh-tools';
 import { settings, scopeFor, startWorker, markInterrupted } from './bridge.js';
+import { Workbench } from './workbench.js';
+import z from '@deepseek-ai/schemastery';
 
 export const name = 'gb';
 export const inject = ['tools', 'subprocess', 'jobs'];
+export const Config = z.object({
+  pythonPath:z.string().default('python').description('Python executable; prefer the environment returned by setup.').volatile(),
+  gbRoot:z.string().default('').description('Absolute directory containing the pinned GB engine.').volatile(),
+  workspaceRoot:z.string().default('').description('Absolute workspace. All data and output stay inside it.').volatile(),
+});
 const text = description => ({ type: 'string', required: true, description });
 const task = { type: 'string', required: true, enum: ['classification', 'regression'] };
 const planId = { plan_id: text('Plan identifier returned by gb_plan_analysis in this session.') };
@@ -19,6 +26,12 @@ export function apply(ctx, config = {}) {
     return done;
   };
   const register = (name, description, parameters, execute) => ctx.tools.register(defineTool({ name, description, parameters, output, execute }));
+  register('gb_list_data', 'List CSV/Excel files and child folders in a workspace directory, without shell/glob.', {directory:{type:'string'}}, (args,exec) => call('files',args,exec));
+  register('gb_inspect_columns', 'Read column metadata and Excel sheet names without raw rows. Required before mapping arbitrary columns.', {path:text('Workspace data file.'),sheet:{type:'string'}}, (args,exec) => call('columns',args,exec));
+  register('gb_prepare_data', 'Create a provenance-bound copy with explicit target, sample, group, split and feature mapping. Show mapping and excluded target count. Never edits the input.', {
+    ...selection,sha256:text('Hash returned by gb_inspect_columns.'),sheet:{type:'string'},
+    mapping:{type:'object',required:true,additionalProperties:false,properties:{target:text('Target column.'),sample:{type:'string'},group:{type:'string'},split:{type:'string'},features:{type:'array',required:true,items:{type:'string'}}}},
+  }, (args,exec) => call('prepare',args,exec));
   register('gb_inspect_data', 'Start here for GB analysis. Check a workspace-relative or absolute dataset path directly; returns environment readiness, dataset metadata and supported methods. No shell, pwd, directory glob or raw-matrix read is needed.', selection,
     (args, exec) => call('inspect', args, exec));
   register('gb_plan_analysis', 'Create a reproducible GB plan. Show the returned settings to the user before execution. Alpha: at most 32 candidates and 4 workers.', {
@@ -69,5 +82,11 @@ export function apply(ctx, config = {}) {
       return { jobId: id, plan_id: args.plan_id };
     });
   // A preset using the GB policy must wait until these global tools exist.
+  register('gb_export_model', 'Refit one eligible saved candidate on calibration data and export its pipeline and provenance. Does not repeat library CV. Selection after viewing holdout compromises confirmatory use.', {...planId,pipeline_id:text('Pipeline_ID from the stored result table.'),reason:{type:'string'}}, (args,exec) => call('export',args,exec));
+  register('gb_predict', 'Predict new workspace samples with an own-session model_id returned by gb_export_model. Never accepts arbitrary joblib files. Extra columns are ignored explicitly; all training features must match.', {
+    model_id:text('Model identifier from gb_export_model.'),path:text('Prediction CSV/Excel within workspace.'),sheet:{type:'string'},sample_column:{type:'string'},sha256:{type:'string'},
+    feature_mapping:{type:'object',additionalProperties:true,description:'Map each training feature name to one prediction column name; values must be strings.'},
+  }, (args,exec) => call('predict',args,exec));
+  if (ctx.plugin) ctx.plugin(Workbench,config);
   ctx.provide('gbConfiguration', config);
 }

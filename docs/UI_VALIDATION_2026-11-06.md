@@ -65,3 +65,24 @@ Real classification and regression runs then completed using the four GB tools, 
 - Local final screenshots: `.runtime/ui-validation/alpha2-regression-summary.jpg`, `alpha2-regression-table.jpg`, `alpha2-regression-plot.jpg`.
 
 The original HTML renderer and Windows shell errors are not declared repaired. The supported default view avoids the former, and the dedicated preset does not expose the latter. Model-authored prose can still produce malformed handwritten Windows links or unsupported scientific interpretations; native file cards and the deterministic summary remain the numerical references. The final policy requests short responses in the user's language and prohibits treating `Overfit_*` diagnostics as percentage-point differences. This is guidance, not a guarantee of model correctness. During development the test host was restarted repeatedly; update the plugin and start a new GB session for acceptance testing rather than relying on an in-memory preset revision from before the update.
+# 0.2.0-alpha.1 native workbench follow-up
+
+The native **插件 → GB 工作台** panel was exercised in Harness Web 0.2.2-rc.1 on Windows on 2026-11-06. Workbench actions were local deterministic operations; no new model authentication was needed. The existing model-driven conversation checks documented below remain separate evidence.
+
+- Saved a Python-path edit through the native configuration form; the saved value appeared immediately and subsequent worker requests succeeded.
+- Chose a synthetic 48-row CSV with custom Chinese metadata names and 8 spectral predictors. Mapped `浓度` to the regression target, `样本编号` to sample ID and `批次` to Group, explicitly excluding the text notes. The UI reported 47 retained rows, 1 excluded target row and 6 groups. The original file's SHA-256 remained unchanged.
+- Generated a two-candidate Raw/SNV + no selection + PLS Regression plan, with 3 outer folds, 2 inner folds, seed 42, one worker and 0.2 internal-holdout ratio. Plan ID: `3ae6e1d67c28c30f4f3f24ae`.
+- Stopped the first run, observed `interrupted` and its recovery button, resumed the same plan and observed `completed`, 2/2 candidates, zero failed. Saved checkpoints were retained.
+- Filtered to SNV and observed a single candidate row, cleared the filter, and selected both candidates for comparison. Native rows showed `Feature_Selection=No selection`, original ranks and separate CV/holdout values. Display controls did not rewrite the leaderboard.
+- Raw candidate `e8e1114bfd893718` had CV_RMSE `1.2974800878502102` and internal-holdout RMSE `1.1640455973953532`; SNV candidate `081602f4277b634b` had CV_RMSE `4.669436` and holdout RMSE `3.603166` at UI display precision. These are synthetic-run observations, not recommendations.
+- Exported the explicitly chosen Raw candidate. Registered model `47e64d221becd44e5006ba5d` retained all 8 original feature names and reported internal-holdout export status `SUCCESS`. The downloaded model's SHA-256 matched its registry record. Only the recorded trusted bundle was loaded during verification.
+- Reopened the panel after a bundle update, selected the saved historical run and exported model, chose a 5-row new-sample CSV whose feature columns were reversed, matched features by name and generated predictions. The UI displayed `预测完成：5 个样本。忽略列：备注。` and the CSV download worked.
+- Downloaded prediction bytes matched saved output; all 5 numeric predictions matched direct GB bundle predictions within `1e-12` relative tolerance. Model and prediction files downloaded to the browser's normal Downloads location.
+- The native diagnostic PNG was visibly rendered. The panel does not use the host's HTML iframe preview.
+
+Local screenshots (excluded from the repository): `.runtime/ui-validation/workbench-comparison.jpg` and `workbench-prediction.jpg`. The installed native client, host entry and workbench service SHA-256 values matched the edited source before final acceptance. Screenshots include local account UI and are intentionally not published.
+
+The isolated installation command and read-only `--check` both completed on a newly created private Windows/Python 3.13 environment. All 7 Python tests passed in that fresh environment. All 8 Node/real-Harness runtime checks passed locally. Linux/Windows CI results are recorded in the repository's Actions history for the release commit.
+
+---
+

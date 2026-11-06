@@ -7,21 +7,21 @@ import { ToolsService, defineTool } from '@deepseek-ai/dsh-tools';
 import { createScope, scopeTarget } from '@deepseek-ai/dsh-scope';
 import { apply as applyMode, GB_TOOL_NAMES } from '../mode.js';
 
-test('real Harness registry accepts all schemas and exposes the four model tools', async () => {
+test('real Harness registry accepts all GB schemas', async () => {
   const ctx = new Context();
   ctx.provide('systemPrompt', { tools() {} });
   const fiber = ctx.plugin(ToolsService);
   await fiber.await();
   try {
     apply(ctx);
-    assert.equal(ctx.tools.schemas().filter(x => x.name.startsWith('gb_')).length, 4);
+    assert.equal(ctx.tools.schemas().filter(x => x.name.startsWith('gb_')).length, GB_TOOL_NAMES.length);
   } finally { await fiber.dispose(); }
 });
 
-test('registers four tools using the real DSH defineTool implementation', () => {
+test('registers all tools using the real DSH defineTool implementation', () => {
   const definitions = [];
   apply({ tools: { register: d => definitions.push(d) }, provide() {} });
-  assert.deepEqual(definitions.map(x => x.name).sort(), ['gb_inspect_data', 'gb_plan_analysis', 'gb_read_results', 'gb_run_analysis']);
+  assert.deepEqual(definitions.map(x => x.name).sort(), [...GB_TOOL_NAMES].sort());
   for (const d of definitions) assert.equal(typeof d.execute, 'function');
 });
 test('requires session ownership and configuration before dispatch', async () => {
