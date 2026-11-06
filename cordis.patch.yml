@@ -1,0 +1,8 @@
+- insert:
+    - id: gb
+      name: dsh-gb
+      config:
+        # Set absolute paths in your profile override before use.
+        pythonPath: python
+        gbRoot: ''
+        workspaceRoot: ''

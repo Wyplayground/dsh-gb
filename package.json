@@ -1,0 +1,37 @@
+{
+  "name": "dsh-gb",
+  "version": "0.1.0-alpha.1",
+  "private": true,
+  "type": "module",
+  "main": "index.js",
+  "files": [
+    "index.js",
+    "bridge.js",
+    "python",
+    "scripts",
+    "cordis.patch.yml",
+    "gb.lock.json",
+    "README.md",
+    "LICENSE"
+  ],
+  "engines": {
+    "dsh": "0.2.2-rc.1"
+  },
+  "dsh": {
+    "bundle": {
+      "patch": "./cordis.patch.yml"
+    }
+  },
+  "scripts": {
+    "test": "node --test tests/*.test.js",
+    "test:python": "python -m unittest discover -s tests -p test_*.py",
+    "setup:gb": "python scripts/setup_gb.py"
+  },
+  "peerDependencies": {
+    "@deepseek-ai/dsh-tools": "0.2.2-rc.1"
+  },
+  "devDependencies": {
+    "@deepseek-ai/dsh": "0.2.2-rc.1",
+    "@deepseek-ai/dsh-tools": "0.2.2-rc.1"
+  }
+}
