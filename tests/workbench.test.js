@@ -39,15 +39,21 @@ test('native workbench runs without a live conversation or global job controller
     // The runtime test generates its own input; use an independent copy here.
     const create=ctx.subprocess.spawn({argv:[process.env.GB_TEST_PYTHON||'python','-c','import sys;sys.path.insert(0,sys.argv[1]);from gb_core.data import create_demo_data;from gb_core.contracts import TaskType;create_demo_data(sys.argv[2],TaskType.REGRESSION,n_samples=36,n_features=8)',resolve('.runtime/gb'),resolve('.test-output/workbench-native.csv')],cwd:process.cwd(),graceMs:1500,stdio:{stdin:'ignore',stdout:{maxBytes:1000},stderr:{maxBytes:1000}}});
     assert.equal((await create.done).exitCode,0);await create.waitForExit();
-    const plan=await workbench.call('plan',{task:'regression',path:resolve('.test-output/workbench-native.csv')});
-    const controller=new AbortController();
-    const started=await workbench.call('start',{plan_id:plan.plan_id},controller.signal);
-    controller.abort();
-    await workbench.work.get(started.jobId).done;
-    const jobs=await workbench.call('jobs',{});
-    assert.equal(jobs.jobs[0].status,'completed',jobs.jobs[0].detail);
-    const result=await workbench.call('results',{plan_id:plan.plan_id});
-    assert.equal(result.state.status,'completed');
+    for(const seed of [40,41,42]) {
+      const args={task:'regression',path:'.test-output/workbench-native.csv',seed};
+      const relativePlan=await workbench.call('plan',args);
+      const plan=await workbench.call('plan',{...args,path:resolve(args.path)});
+      assert.equal(plan.plan_id,relativePlan.plan_id,'Relative and absolute paths must bind to the same plan.');
+      const controller=new AbortController();
+      const started=await workbench.call('start',{plan_id:plan.plan_id},controller.signal);
+      controller.abort();
+      await workbench.work.get(started.jobId).done;
+      const jobs=await workbench.call('jobs',{});
+      const held=jobs.jobs.find(j=>j.id===started.jobId);
+      assert.equal(held.status,'completed',held.detail);
+      const result=await workbench.call('results',{plan_id:plan.plan_id});
+      assert.equal(result.state.status,'completed');
+    }
     await assert.rejects(workbench.call('cancel',{job_id:'foreign-job'}),/Unknown/);
     await assert.rejects(workbench.call('shell',{}),/Unsupported/);
   } finally {await consumer.dispose();await fiber.dispose();await sub.dispose();}
