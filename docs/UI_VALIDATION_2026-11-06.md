@@ -65,9 +65,9 @@ Real classification and regression runs then completed using the four GB tools, 
 - Local final screenshots: `.runtime/ui-validation/alpha2-regression-summary.jpg`, `alpha2-regression-table.jpg`, `alpha2-regression-plot.jpg`.
 
 The original HTML renderer and Windows shell errors are not declared repaired. The supported default view avoids the former, and the dedicated preset does not expose the latter. Model-authored prose can still produce malformed handwritten Windows links or unsupported scientific interpretations; native file cards and the deterministic summary remain the numerical references. The final policy requests short responses in the user's language and prohibits treating `Overfit_*` diagnostics as percentage-point differences. This is guidance, not a guarantee of model correctness. During development the test host was restarted repeatedly; update the plugin and start a new GB session for acceptance testing rather than relying on an in-memory preset revision from before the update.
-# 0.2.0-alpha.1 native workbench follow-up
+## 0.2.0-alpha.1 native workbench follow-up
 
-The native **插件 → GB 工作台** panel was exercised in Harness Web 0.2.2-rc.1 on Windows on 2026-11-06. Workbench actions were local deterministic operations; no new model authentication was needed. The existing model-driven conversation checks documented below remain separate evidence.
+The native **插件 → GB 工作台** panel was exercised in Harness Web 0.2.2-rc.1 on Windows on 2026-11-06. Workbench actions were local deterministic operations; no new model authentication was needed. The existing model-driven conversation checks documented above remain separate evidence.
 
 - Saved a Python-path edit through the native configuration form; the saved value appeared immediately and subsequent worker requests succeeded.
 - Chose a synthetic 48-row CSV with custom Chinese metadata names and 8 spectral predictors. Mapped `浓度` to the regression target, `样本编号` to sample ID and `批次` to Group, explicitly excluding the text notes. The UI reported 47 retained rows, 1 excluded target row and 6 groups. The original file's SHA-256 remained unchanged.
@@ -83,6 +83,3 @@ The native **插件 → GB 工作台** panel was exercised in Harness Web 0.2.2-
 Local screenshots (excluded from the repository): `.runtime/ui-validation/workbench-comparison.jpg` and `workbench-prediction.jpg`. The installed native client, host entry and workbench service SHA-256 values matched the edited source before final acceptance. Screenshots include local account UI and are intentionally not published.
 
 The isolated installation command and read-only `--check` both completed on a newly created private Windows/Python 3.13 environment. All 7 Python tests passed in that fresh environment. All 8 Node/real-Harness runtime checks passed locally. Linux/Windows CI results are recorded in the repository's Actions history for the release commit.
-
----
-
