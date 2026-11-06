@@ -20,7 +20,8 @@ jobs:
           cache-dependency-path: requirements.lock
       - run: npm ci --ignore-scripts
       - run: python scripts/setup_gb.py
-      - run: python -m pip install --require-hashes --only-binary=:all: -r requirements.lock
+      - run: |
+          python -m pip install --require-hashes --only-binary=:all: -r requirements.lock
       - run: python -m pip check
       - run: python python/dependency_policy.py
       - run: python scripts/install.py --workspace .test-output/install-smoke --install-deps --json-progress
