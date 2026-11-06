@@ -32,7 +32,7 @@ def write_report(path, text):
 def contained(root, path):
     path = Path(path).resolve()
     if not path.is_relative_to(root):
-        raise ValueError('Path must stay inside the configured workspace.')
+        raise ValueError(f'Path must stay inside the configured workspace. Resolved path: {path}; boundary: {root}')
     return path
 
 
