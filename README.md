@@ -65,7 +65,7 @@ npm pack --ignore-scripts
 
 Python integration tests generate synthetic data and compare both classification/regression metrics against direct calls to the same GB engine; they also check checkpoint resume, data changes, invalid paths and session isolation. Synthetic tests are software validation, not evidence of scientific performance.
 
-The native runtime test uses DSH's actual local subprocess provider, cancels a multi-process analysis, verifies process-range cleanup, then resumes its checkpoints. All local checks passed on Windows with Python 3.13 and DSH 0.2.2-rc.1. Browser/model-driven end-to-end interaction has not yet been validated.
+The native runtime test uses DSH's actual local subprocess provider, cancels a multi-process analysis, verifies process-range cleanup, then resumes its checkpoints. Local checks passed on Windows with Python 3.13 and DSH 0.2.2-rc.1. Real model-driven classification and regression workflows were also exercised through the Harness Web UI on 2026-11-06: inspection, displayed plans, background jobs, result reading, native file cards, CSV previews and PNG previews worked. HTML file cards were delivered, but the HTML sidebar preview remained blank in the tested in-app browser. The first generic Windows shell call also encountered a host ACL error; GB tools worked and the regression workflow completed without shell calls. See the [UI validation record](docs/UI_VALIDATION_2026-11-06.md) for the exact scope and remaining issues.
 
 `.github/workflows/test.yml` runs the plugin and Python integration checks on Windows and Linux. See the repository's Actions tab for the result of each commit; local Windows verification and remote CI results are separate evidence.
 
