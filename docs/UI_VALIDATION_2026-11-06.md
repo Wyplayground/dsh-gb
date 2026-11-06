@@ -51,3 +51,17 @@ Both saved rows and internal-holdout evaluations had `SUCCESS` status. Classific
 4. **Artifact discovery:** `gb_read_results` lists top-level files, so the model used a bounded glob inside the returned run directory to find diagnostic PNGs. Returning an explicit plot index would remove this extra step.
 
 Local screenshots and full run artifacts are retained outside Git under `.runtime/ui-validation/` and `.runtime/ui-workspace/`. Account credentials, local authentication URLs, raw session logs and screenshots containing the account UI are not published in this repository.
+
+## Alpha.2 follow-up
+
+The default presentation now uses a generated Markdown summary, the native CSV table, and a diagnostic PNG. It no longer depends on the HTML iframe preview. **GB 分析** is an optional preset; standard sessions retain their original capabilities.
+
+The shared-preset/child-Agent scope behavior was tested explicitly. A first development attempt restricted the preset's parent scope and inadvertently hid presentation from child Agents; the final policy instead installs the full eight-tool allow-list on the actual Agent during serial initialization. The same test verifies that another standard Agent remains unrestricted.
+
+Real classification and regression runs then completed using the four GB tools, `job_output`, and native `present`. The final regression trajectory was inspected in the UI: `gb_inspect_data → gb_plan_analysis → gb_run_analysis → job_output → gb_read_results → present`. No generic command, filesystem search, or raw input read was called in that trajectory. The generated summary visibly rendered a heading, recorded status/counts and numerical table in the sidebar; CSV and PNG previews were also opened and checked. The same real numeric results as the original smoke tests were retained.
+
+- Classification plan: `073b80c6eabcddb408548b48` (48 samples, 16 features; one successful candidate, no failures).
+- Final regression plan: `ca2be0b6b666ea0dae88dca9` (48 samples, 16 features; one successful candidate, no failures).
+- Local final screenshots: `.runtime/ui-validation/alpha2-regression-summary.jpg`, `alpha2-regression-table.jpg`, `alpha2-regression-plot.jpg`.
+
+The original HTML renderer and Windows shell errors are not declared repaired. The supported default view avoids the former, and the dedicated preset does not expose the latter. Model-authored prose can still produce malformed handwritten Windows links or unsupported scientific interpretations; native file cards and the deterministic summary remain the numerical references. The final policy requests short responses in the user's language and prohibits treating `Overfit_*` diagnostics as percentage-point differences. This is guidance, not a guarantee of model correctness. During development the test host was restarted repeatedly; update the plugin and start a new GB session for acceptance testing rather than relying on an in-memory preset revision from before the update.

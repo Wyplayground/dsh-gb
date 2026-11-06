@@ -1,13 +1,16 @@
 {
   "name": "dsh-gb",
-  "version": "0.1.0-alpha.1",
+  "version": "0.1.0-alpha.2",
   "private": true,
   "type": "module",
   "main": "index.js",
+  "exports": { ".": "./index.js", "./mode": "./mode.js", "./package.json": "./package.json" },
   "files": [
     "index.js",
+    "mode.js",
     "bridge.js",
-    "python",
+    "python/worker.py",
+    "python/result_view.py",
     "scripts",
     "cordis.patch.yml",
     "gb.lock.json",

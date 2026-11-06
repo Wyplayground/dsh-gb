@@ -1,6 +1,8 @@
 # dsh-gb
 
-Grand Banquet chemometrics tools for DeepSeek Harness. Local alpha **0.1.0-alpha.1** targeting **DSH 0.2.2-rc.1**.
+Grand Banquet chemometrics tools for DeepSeek Harness. Alpha **0.1.0-alpha.2** targeting **DSH 0.2.2-rc.1**.
+
+This release adds the optional **GB 分析** mode and defaults to a generated Markdown summary, CSV table and diagnostic PNG. See [Alpha.2 changes and limits](docs/ALPHA2_CHANGES.md).
 
 This independent plugin wraps the existing GB Python engine. It does not replace its scientific methods or require a second DeepSeek API key. Raw data stays in the configured local workspace; model-facing results contain metadata and bounded result summaries. Harness receives the tool arguments, paths, settings and summaries, so these are part of the conversation context.
 
@@ -35,18 +37,20 @@ No TypeScript build or installation-time code execution is required: entry point
 
 ## Tools and example workflow
 
-1. `gb_inspect_data`: inspect local CSV/XLS/XLSX metadata and list supported methods. GB requires `Sample name` and `Class` (classification) or `Target` (regression), numeric feature columns, optional `Group` and `Split`. GB drops missing/non-numeric targets; the returned sample count is after filtering.
+Before sending the first message in a new session, select **GB 分析** from the mode menu. This optional preset exposes the four GB tools, `job_output`, `job_list`, `job_kill` and `present`; shell execution, arbitrary file reads/searches and code generation tools are not exposed. The standard preset and its tools are unchanged. Existing conversations keep their preset: start a new GB session after installing/updating this bundle. This is a capability restriction, not an OS sandbox or a repair to the host's general Windows shell.
+
+1. `gb_inspect_data`: inspect local CSV/XLS/XLSX metadata, file readiness, output writability, configured workspace, Python/dependency versions and supported methods. No shell directory probe or raw-matrix read is necessary. Feature-name previews are bounded to 16 names; sample identifiers and raw feature rows are not returned. GB requires `Sample name` and `Class` (classification) or `Target` (regression), numeric feature columns, optional `Group` and `Split`. GB drops missing/non-numeric targets; the returned sample count is after filtering.
 2. `gb_plan_analysis`: validate settings, check fold construction, record data/source fingerprints, and return `plan_id`. Defaults: exploration, Raw, no variable selection, PLS model, 3 outer folds, 2 inner folds, seed 42, 1 worker. Explicit Group/Split assignments are retained by GB.
 3. Show the plan in the conversation, then `gb_run_analysis` with that `plan_id`. It returns a DSH job ID. Read/wait/stop using native `job_output`, `job_list`, `job_kill`.
-4. `gb_read_results` returns saved state, bounded metrics and artifact paths. GB writes leaderboard HTML/CSV, plots, a fitted bundle, manifests and candidate evidence. Use Harness file presentation to view them.
+4. `gb_read_results` returns saved state, bounded metrics, root artifact paths and an explicit PNG plot index. It writes `gb_summary.md` and returns `presentation.default_files`: the Markdown summary, CSV leaderboard and task-specific diagnostic PNG. The model passes these exact paths to native `present`, so it needs no extra glob or handwritten Windows-path Markdown links. Open the cards in the sidebar to view the summary, spreadsheet and plot. GB's HTML leaderboard remains a supplementary file; the default view does not depend on its iframe renderer. Artifact indexes cap root files at 128 and plots at 64 and report truncation explicitly.
 
-Example prompt: “Inspect classification.csv using GB. Propose a small exploration plan with Raw preprocessing, no selection and PLS-DA. Show the plan, run it, and explain the CV and internal-holdout results and any failures.”
+Example prompt in **GB 分析**: “Inspect classification.csv using GB. Propose a small exploration plan with Raw preprocessing, no selection and PLS-DA. Show the plan, run it, and display the summary, result table and diagnostic plot. Explain CV/internal-holdout differences and any failures.”
 
 Plans and runs are stored under `<workspaceRoot>/.dsh-gb/<session-hash>/`. The same plan ID is scoped to its creating session. Changing data or scientific source after planning blocks execution. Re-running an unchanged plan uses GB's checkpoints. Plugin state and native jobs are distinct: a completed job can contain scientific pipeline or export failures, which are reported as `completed_with_errors`.
 
 ## Alpha boundaries
 
-- At most 32 candidates and 1–4 workers per plan. Full 990-candidate workflows, prediction, custom UI and MCP are deferred.
+- At most 32 candidates and 1–4 workers per plan. Full 990-candidate workflows, prediction, a custom interactive result panel and MCP are deferred. Default result presentation uses existing native Markdown/CSV/PNG viewers.
 - Source and data paths must resolve inside configured boundaries; outputs stay in the analysis workspace. This is local path validation, not OS isolation against concurrent filesystem mutation. DSH's active tool permission policy still applies.
 - Cancellation uses the Harness-managed process range and waits for cleanup. GB's completed checkpoints are preserved; partial runs are not presented as completed analysis. Harness shutdown interrupts work; restart does not keep a job alive. Resume within the original session by submitting the same plan. No daemon is installed.
 - `CV_*` orders the declared candidate library. `Val_*` is same-source internal holdout, not used for ranking. The first-ranked candidate is not proof of universal superiority or an unbiased evaluation of the whole selection process. See [GB evaluation methods](https://github.com/Wyplayground/Grand-Banquet_Chemometrics-tool/blob/main/Evaluation%20methods.md).

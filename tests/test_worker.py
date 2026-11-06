@@ -35,11 +35,29 @@ class WorkerIntegration(unittest.TestCase):
                 info = self.call('inspect', dict(task=task.value, path=str(path)))
                 self.assertEqual(info['samples'], 48)
                 self.assertNotIn('sample_names', info)
+                self.assertTrue(info['environment']['output_writable'])
+                self.assertTrue(info['file']['readable'])
+                self.assertEqual(len(info['feature_names_preview']), 16)
                 plan = self.call('plan', dict(task=task.value, path=str(path)))
                 run = self.call('run', dict(plan_id=plan['plan_id']))
                 self.assertEqual(run['state']['status'], 'completed')
                 result = self.call('results', dict(plan_id=plan['plan_id']))
                 self.assertEqual(result['summary']['successful_pipelines'], 1)
+                presented = result['presentation']['default_files']
+                self.assertEqual([p['role'] for p in presented], ['summary', 'table', 'plot'])
+                self.assertTrue(all(Path(p['path']).is_file() for p in presented))
+                self.assertTrue(any(k.startswith('plots/') for k in result['artifacts']))
+                self.assertFalse(result['artifact_index']['truncated'])
+                report = Path(result['artifacts']['gb_summary.md']).read_text(encoding='utf-8')
+                self.assertIn('CV_* orders', report)
+                self.assertIn('Val_* is same-source internal holdout', report)
+                self.assertIn('](plots/', report)
+                for row in result['summary']['top_pipelines']:
+                    from importlib import import_module
+                    sys.path.insert(0, str(ROOT / 'python'))
+                    format_cell = import_module('result_view').cell
+                    metric = 'CV_Accuracy' if task is TaskType.CLASSIFICATION else 'CV_RMSE'
+                    self.assertIn(format_cell(row[metric]), report)
                 config = RunConfig(**plan['settings'], output_dir=ROOT / '.test-output' / ('direct-' + task.value))
                 data = load_dataset(path, task)
                 direct = EvaluationEngine(split_dataset(data, config), config).run(enumerate_specs(task, **plan['methods'], seed=config.random_state))

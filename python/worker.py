@@ -8,6 +8,7 @@ from pathlib import Path
 import re
 import sys
 import time
+import tempfile
 PROTOCOL_OUT = sys.stdout
 
 
@@ -19,6 +20,12 @@ def write_json(path, value):
     path.parent.mkdir(parents=True, exist_ok=True)
     tmp = path.with_suffix(f'.{os.getpid()}.tmp')
     tmp.write_text(json.dumps(value, ensure_ascii=False, allow_nan=False, indent=2), encoding='utf-8')
+    tmp.replace(path)
+
+
+def write_report(path, text):
+    tmp = path.with_suffix(f'.{os.getpid()}.tmp')
+    tmp.write_text(text, encoding='utf-8')
     tmp.replace(path)
 
 
@@ -59,7 +66,7 @@ def dispatch(req):
     from gb_core.contracts import (TaskType, RunConfig, EvaluationMode, enumerate_specs,
         PREPROCESSING_METHODS, SELECTOR_METHODS, CLASSIFICATION_MODELS, REGRESSION_MODELS)
     from gb_core.data import load_dataset, split_dataset
-    from gb_core.artifacts import source_provenance
+    from gb_core.artifacts import source_provenance, dependency_versions
     import pandas as pd
 
     scope = req.get('scope', 'local')
@@ -82,6 +89,17 @@ def dispatch(req):
                 'available_methods': {'preprocessing': list(PREPROCESSING_METHODS),
                     'selectors': list(SELECTOR_METHODS),
                     'models': list(CLASSIFICATION_MODELS if task is TaskType.CLASSIFICATION else REGRESSION_MODELS)}}
+        # Readiness is checked using ordinary file I/O, never ACL changes or a shell.
+        with tempfile.TemporaryFile(dir=storage) as probe:
+            probe.write(b'gb-readiness-check')
+            probe.flush()
+        info['environment'] = dict(workspace_root=str(root), gb_root=str(gb),
+                                   python_executable=sys.executable, python_version=sys.version.split()[0],
+                                   dependency_versions=dependency_versions(), output_writable=True)
+        info['file'] = dict(exists=True, readable=True, size_bytes=path.stat().st_size)
+        info['target_column'] = 'Class' if task is TaskType.CLASSIFICATION else 'Target'
+        info['feature_names_preview'] = [str(c) for c in dataset.features.columns[:16]]
+        info['feature_names_truncated'] = len(dataset.features.columns) > 16
         if op == 'inspect':
             return info
         mode = EvaluationMode(args.get('mode', 'exploration'))
@@ -141,8 +159,9 @@ def dispatch(req):
         result = {'plan_id': plan_id, 'state': state}
         if state.get('status') in ('completed', 'completed_with_errors'):
             from gb_core.reporting import structured_summary
-            result['summary'] = structured_summary(pd.read_csv(run_dir / 'leaderboard_v3.csv'), TaskType(plan['settings']['task']), top_n=5)
-            result['artifacts'] = {p.name: str(p) for p in sorted(run_dir.iterdir()) if p.suffix in ('.csv', '.html', '.json', '.joblib') and p.name != 'state.json'}
+            from result_view import build_result_view
+            result['summary'] = structured_summary(pd.read_csv(contained(run_dir, run_dir / 'leaderboard_v3.csv')), TaskType(plan['settings']['task']), top_n=5)
+            result.update(build_result_view(run_dir, plan, state, result['summary'], write_report))
         return result
     if op != 'run':
         raise ValueError('Unsupported operation')

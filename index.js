@@ -19,7 +19,7 @@ export function apply(ctx, config = {}) {
     return done;
   };
   const register = (name, description, parameters, execute) => ctx.tools.register(defineTool({ name, description, parameters, output, execute }));
-  register('gb_inspect_data', 'Check a local GB dataset. Returns metadata and supported methods, without raw sample rows.', selection,
+  register('gb_inspect_data', 'Start here for GB analysis. Check a workspace-relative or absolute dataset path directly; returns environment readiness, dataset metadata and supported methods. No shell, pwd, directory glob or raw-matrix read is needed.', selection,
     (args, exec) => call('inspect', args, exec));
   register('gb_plan_analysis', 'Create a reproducible GB plan. Show the returned settings to the user before execution. Alpha: at most 32 candidates and 4 workers.', {
     ...selection,
@@ -28,7 +28,7 @@ export function apply(ctx, config = {}) {
     ...Object.fromEntries(['outer_folds', 'inner_folds', 'seed', 'jobs'].map(k => [k, { type: 'integer' }])),
     validation_ratio: { type: 'number' },
   }, (args, exec) => call('plan', args, exec));
-  register('gb_read_results', 'Read saved GB status and bounded result evidence from this session. CV ordering is not proof of a universally best pipeline; Val_* is internal holdout.', planId,
+  register('gb_read_results', 'Read saved GB status, bounded evidence, all result/plot paths and a presentation manifest. Present presentation.default_files (Markdown summary, CSV, diagnostic PNG) with the native present tool. No shell or glob is needed. HTML is supplementary. CV ordering is not proof of a universally best pipeline; Val_* is internal holdout.', planId,
     async (args, exec) => {
       const value = await call('results', args, exec);
       const live = ctx.jobs.list(exec.agent.id).some(j => j.label === 'GB analysis ' + args.plan_id && ['running', 'stopping'].includes(j.status));
@@ -68,4 +68,6 @@ export function apply(ctx, config = {}) {
       });
       return { jobId: id, plan_id: args.plan_id };
     });
+  // A preset using the GB policy must wait until these global tools exist.
+  ctx.provide('gbConfiguration', config);
 }
