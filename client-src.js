@@ -29,6 +29,7 @@ function WorkbenchPanel({api,configuration}) {
   const [prepared,setPrepared]=useState(null),[inspection,setInspection]=useState(null);
   const [methods,setMethods]=useState({preprocessing:['Raw'],selectors:['None'],models:['PLS Regression']});
   const [library,setLibrary]=useState('custom');
+  const [mode,setMode]=useState('exploration');
   const [folds,setFolds]=useState('3'),[inner,setInner]=useState('2'),[seed,setSeed]=useState('42'),[workers,setWorkers]=useState('1'),[holdout,setHoldout]=useState('0.2');
   const [plan,setPlan]=useState(null),[job,setJob]=useState(null),[jobs,setJobs]=useState([]),[history,setHistory]=useState([]),[result,setResult]=useState(null);
   const [filter,setFilter]=useState(''),[statusFilter,setStatusFilter]=useState('all'),[sort,setSort]=useState('Selection_Rank'),[ascending,setAscending]=useState(true),[selected,setSelected]=useState([]);
@@ -157,10 +158,11 @@ function WorkbenchPanel({api,configuration}) {
     inspection&&h('fieldset',{className:'gb-card',disabled:busy||!!job},heading(3,'3 · 制定计划并运行'),
       h('p',null,`${inspection.samples} 个样本 · ${inspection.features} 个特征 · 特征缺失值 ${inspection.missing_feature_values} · 分组 ${inspection.groups??'未设置'} · 显式划分 ${inspection.explicit_split?'有':'无'}`),
       select('候选库',library,[{value:'custom',label:'自选组合（最多 32）'},{value:'full',label:'全部 990 候选'}],value=>{setLibrary(value);setPlan(null);}),
+      select('评估模式',mode,[{value:'exploration',label:'探索（exploration）'},{value:'standard',label:'标准（standard）'},{value:'audit',label:'审计（audit）'}],value=>{setMode(value);setPlan(null);}),
       library==='full'&&h('p',null,'将覆盖 15 种预处理 × 6 种特征选择 × 11 种模型。仍使用所选评估模式；耗时可能较长，可停止后按同一计划续跑。'),
       h('fieldset',{disabled:library==='full'},...['preprocessing','selectors','models'].map((key,i)=>h('div',{key},h('strong',null,['预处理','特征选择','模型'][i]),...inspection.available_methods[key].map(value=>box(value,methods[key].includes(value),enabled=>toggleMethod(key,value,enabled)))))),
       input('外层折数',folds,v=>{setFolds(v);setPlan(null);},'number'),input('内层折数',inner,v=>{setInner(v);setPlan(null);},'number'),input('随机种子',seed,v=>{setSeed(v);setPlan(null);},'number'),input('并行数（1–4）',workers,v=>{setWorkers(v);setPlan(null);},'number'),input('内部留出比例',holdout,v=>{setHoldout(v);setPlan(null);}),
-      btn('生成分析计划',()=>act(async()=>{setPlan(await call('plan',{task:inspection.task,path:prepared.path,library,...library==='custom'?methods:{},outer_folds:Number(folds),inner_folds:Number(inner),seed:Number(seed),jobs:Number(workers),validation_ratio:Number(holdout)}));setResult(null);await refreshHistory();}),busy||!prepared),
+      btn('生成分析计划',()=>act(async()=>{setPlan(await call('plan',{task:inspection.task,path:prepared.path,library,mode,...library==='custom'?methods:{},outer_folds:Number(folds),inner_folds:Number(inner),seed:Number(seed),jobs:Number(workers),validation_ratio:Number(holdout)}));setResult(null);await refreshHistory();}),busy||!prepared),
       plan?.settings&&h('div',null,h('pre',null,JSON.stringify({task:plan.settings.task,candidates:plan.candidate_count,...plan.settings,methods:plan.methods},null,2)),
         btn('按此计划开始 / 续跑',()=>act(async()=>{const next=await call('start',{plan_id:plan.plan_id});setJob(next.jobId);setResult(null);}),busy||!!job))),
     h('div',{className:'gb-card'},heading(3,'4 · 结果、筛选与比较'),

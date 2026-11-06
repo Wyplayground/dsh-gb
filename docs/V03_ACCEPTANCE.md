@@ -12,7 +12,7 @@ A separately reproducible startup-cancellation bug was fixed: disposing a host b
 
 The logged-in DeepSeek-V4.1-Flash account completed all nine GB tools in the native GB conversation preset: folder listing, column inspection, explicit mapping, data inspection, planning, background run, results, export and prediction. Native `present` displayed Markdown, CSV and diagnostic PNG; the prediction CSV rendered in the native spreadsheet sidebar. No generic shell tool was exposed or called.
 
-The conversation used bread storage data with 324 rows, 142 predictors, 36 groups and the existing 270/54 calibration/validation split. Raw / None / PLS Regression, exploration mode, 3 outer folds, 2 inner folds and seed 42 produced CV RMSE 3.6005 and internal-holdout RMSE 2.7488. These are observed workflow outputs, not independent scientific validation. Prediction used five rows extracted from the same source without labels, solely to verify feature matching and output rendering.
+The conversation used bread storage data with 324 rows, 142 predictors, 36 groups and the existing 270/54 calibration/validation split. Raw / None / PLS Regression, exploration mode, 3 outer folds, 2 inner folds and seed 42 produced CV RMSE 3.6005 and internal-holdout RMSE 2.7488 in the earlier, unpinned environment. This conversation occurred before applying the new dependency lock. These are observed workflow outputs, not independent scientific validation. Prediction used five rows extracted from the same source without labels, solely to verify feature matching and output rendering.
 
 One recoverable model tool error occurred: it attempted inspection before mapping nonstandard columns. The tool rejected the missing required names; the model then mapped the file and completed the workflow. The UI did not silently fit a replacement analysis.
 
@@ -36,7 +36,7 @@ The workbench now starts the same private installer as the CLI, shows progress, 
 
 Harness must be restarted after installing a version with a changed RPC contract. During local upgrade, pnpm 11 asked for build-script decisions on inherited native packages. Explicitly denying those scripts allowed the plugin update; no build-script approval was needed. This is a host package-manager setting, separate from Python wheel hash verification.
 
-UI installation acceptance is recorded below after the final browser check.
+The native UI created a fresh private environment, displayed completed installation, applied all three paths through the host configuration form, and reported **环境就绪 · Python 3.13.12 · 固定依赖匹配 · 输出可写**. The equivalent read-only CLI check also passed with the same lock hash. The installed environment then mapped the real bread data, preserved all 324 rows/142 features/36 groups/existing Split, created a new plan and completed 1/1 candidates with no failures. In this pinned environment its CV RMSE was **3.159462**, internal-holdout RMSE **2.748824**. The CV difference from the earlier conversation is an environment-sensitive result, not a plugin-equivalence assertion across dependency versions. Comparisons with direct GB in section 3 use this same pinned environment.
 
 ## 5. Exact dependency lock and compatibility
 

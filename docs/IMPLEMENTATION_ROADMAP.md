@@ -10,4 +10,4 @@ User-authorized scope: Windows path reliability; real DeepSeek conversations; re
 6. Add an explicit full-library mode for 15 preprocessing × 6 selectors × 11 models = 990 candidates. Preserve plan review, limited workers, progress, stop/resume and per-candidate failures.
 7. Add a local stdio MCP server over the same scientific worker and scoped plan/model storage; validate with a real MCP client. No additional network listener or model credential is needed.
 
-Acceptance evidence and remaining environment constraints will be recorded per step. Existing manuscript data and GB source checkouts are read-only inputs to this work.
+All seven implementation steps are available in 0.3.0-alpha.1. Local acceptance includes 12 Node tests, 15 Python tests, three real datasets compared against direct GB, a real 990/990 run, native private-environment installation, and official MCP client integration. See [the acceptance record](V03_ACCEPTANCE.md) for evidence and limits, and the current commit's Actions checks for cross-platform completion. Existing manuscript data and GB source checkouts remain read-only inputs.
