@@ -9,6 +9,7 @@ import re
 import sys
 import time
 import tempfile
+from path_policy import contained, inside
 PROTOCOL_OUT = sys.stdout
 
 
@@ -27,13 +28,6 @@ def write_report(path, text):
     tmp = path.with_suffix(f'.{os.getpid()}.tmp')
     tmp.write_text(text, encoding='utf-8')
     tmp.replace(path)
-
-
-def contained(root, path):
-    path = Path(path).resolve()
-    if not path.is_relative_to(root):
-        raise ValueError(f'Path must stay inside the configured workspace. Resolved path: {path}; boundary: {root}')
-    return path
 
 
 @contextlib.contextmanager
@@ -63,6 +57,10 @@ def dispatch(req):
     root = Path(req['workspaceRoot']).resolve(strict=True)
     gb = Path(req['gbRoot']).resolve(strict=True)
     sys.path.insert(0, str(gb))
+    from dependency_policy import lock_status, require_lock
+    environment_lock = lock_status()
+    if req['op'] in ('prepare', 'plan', 'run', 'export', 'predict'):
+        require_lock()
     from gb_core.contracts import (TaskType, RunConfig, EvaluationMode, enumerate_specs,
         PREPROCESSING_METHODS, SELECTOR_METHODS, CLASSIFICATION_MODELS, REGRESSION_MODELS)
     from gb_core.data import load_dataset, split_dataset
@@ -102,9 +100,9 @@ def dispatch(req):
     if op == 'status':
         with tempfile.TemporaryFile(dir=storage) as probe:
             probe.write(b'ready')
-        return dict(ready=True, python=sys.executable, python_version=sys.version.split()[0],
+        return dict(ready=environment_lock['matches'], python=sys.executable, python_version=sys.version.split()[0],
                     gb_root=str(gb), workspace_root=str(root), dependencies=dependency_versions(),
-                    source=source_provenance(gb), output_writable=True)
+                    source=source_provenance(gb), output_writable=True, dependency_lock=environment_lock)
     if op == 'files':
         return discover(root, args.get('directory', '.'), contained)
     if op == 'columns':
@@ -147,13 +145,14 @@ def dispatch(req):
             probe.flush()
         info['environment'] = dict(workspace_root=str(root), gb_root=str(gb),
                                    python_executable=sys.executable, python_version=sys.version.split()[0],
-                                   dependency_versions=dependency_versions(), output_writable=True)
+                                   dependency_versions=dependency_versions(), output_writable=True,
+                                   dependency_lock=environment_lock)
         info['file'] = dict(exists=True, readable=True, size_bytes=path.stat().st_size)
         info['target_column'] = 'Class' if task is TaskType.CLASSIFICATION else 'Target'
         info['feature_names_preview'] = [str(c) for c in dataset.features.columns[:16]]
         info['feature_names_truncated'] = len(dataset.features.columns) > 16
         imported = path.parent / 'import.json'
-        if path.is_relative_to(storage / 'inputs') and imported.is_file():
+        if inside(storage / 'inputs', path) and imported.is_file():
             from input_ops import digest
             info['import'] = json.loads(contained(storage, imported).read_text(encoding='utf-8'))
             if info['import']['normalized_sha256'] != digest(path):
@@ -161,15 +160,22 @@ def dispatch(req):
         if op == 'inspect':
             return info
         mode = EvaluationMode(args.get('mode', 'exploration'))
+        library = args.get('library', 'custom')
+        if library not in ('custom', 'full'):
+            raise ValueError('Choose custom or full candidate library.')
         defaults = ['PLS-DA'] if task is TaskType.CLASSIFICATION else ['PLS Regression']
         methods = {'preprocessing': args.get('preprocessing', ['Raw']),
                    'selectors': args.get('selectors', ['None']), 'models': args.get('models', defaults)}
+        if library == 'full':
+            if any(key in args for key in methods):
+                raise ValueError('Full library selects all methods; do not combine it with custom method lists.')
+            methods = {key: list(info['available_methods'][key]) for key in methods}
         for key, values in methods.items():
             if not values or len(values) != len(set(values)) or any(v not in info['available_methods'][key] for v in values):
                 raise ValueError('Invalid/duplicate/empty method selection: ' + key)
         n = len(methods['preprocessing']) * len(methods['selectors']) * len(methods['models'])
-        if n > 32:
-            raise ValueError('Alpha release supports at most 32 candidates per plan.')
+        if n > (990 if library == 'full' else 32):
+            raise ValueError('Custom plans support at most 32 candidates; choose full for the 990-candidate library.')
         settings = {'task': task.value, 'mode': mode.value, 'outer_folds': args.get('outer_folds', 3),
                     'inner_folds': args.get('inner_folds', 2), 'random_state': args.get('seed', 42),
                     'n_jobs': args.get('jobs', 1), 'validation_ratio': args.get('validation_ratio', 0.2)}
@@ -193,7 +199,7 @@ def dispatch(req):
             engine._inner_splits(enumerate_specs(task, **methods)[0], engine.X_cal[train], engine.y_cal[train],
                                  None if groups is None else groups[train])
         provenance = source_provenance(gb)
-        plan = {'schema': 1, 'data': info, 'settings': settings, 'methods': methods,
+        plan = {'schema': 2, 'library': library, 'data': info, 'settings': settings, 'methods': methods,
                 'candidate_count': n, 'source_sha256': provenance['combined_sha256'],
                 'gb_commit': provenance.get('git_commit'),
                 'interpretation': 'CV-based candidate ordering; Val_* is internal holdout, never used for ranking.'}
@@ -221,7 +227,13 @@ def dispatch(req):
             result['summary'] = structured_summary(pd.read_csv(contained(run_dir, run_dir / 'leaderboard_v3.csv')), TaskType(plan['settings']['task']), top_n=5)
             result.update(build_result_view(run_dir, plan, state, result['summary'], write_report))
             from model_ops import candidate_table
-            result['candidates'] = candidate_table(run_dir)
+            offset, limit = args.get('candidate_offset', 0), args.get('candidate_limit', 20)
+            if type(offset) is not int or type(limit) is not int or offset < 0 or not 1 <= limit <= 990:
+                raise ValueError('Candidate offset must be nonnegative; limit must be 1..990.')
+            all_rows = candidate_table(run_dir)
+            result['candidates'] = all_rows[offset:offset+limit]
+            result['candidates_total'] = len(all_rows)
+            result['candidate_page'] = dict(offset=offset, limit=limit, returned=len(result['candidates']))
         return result
     if op == 'export':
         from model_ops import export_model
@@ -233,6 +245,9 @@ def dispatch(req):
     if op != 'run':
         raise ValueError('Unsupported operation')
     dataset = load_dataset(contained(root, plan['data']['path']), TaskType(plan['settings']['task']))
+    saved_lock = plan['data'].get('environment', {}).get('dependency_lock')
+    if not saved_lock or saved_lock['lock_sha256'] != environment_lock['lock_sha256'] or saved_lock['packages'] != environment_lock['packages']:
+        raise ValueError('Python environment changed since planning. Create a new plan under the pinned runtime.')
     if dataset.fingerprint != plan['data']['fingerprint']:
         raise ValueError('Dataset changed after planning. Create a new plan.')
     if source_provenance(gb)['combined_sha256'] != plan['source_sha256']:

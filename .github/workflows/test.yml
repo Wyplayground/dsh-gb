@@ -4,7 +4,8 @@ jobs:
   integration:
     strategy:
       matrix:
-        os: [ubuntu-latest, windows-latest]
+        os: [ubuntu-latest, windows-latest, macos-latest]
+        python: ['3.10', '3.13']
     runs-on: ${{ matrix.os }}
     steps:
       - uses: actions/checkout@v4
@@ -14,10 +15,16 @@ jobs:
           cache: npm
       - uses: actions/setup-python@v5
         with:
-          python-version: '3.11'
+          python-version: ${{ matrix.python }}
+          cache: pip
+          cache-dependency-path: requirements.lock
       - run: npm ci --ignore-scripts
       - run: python scripts/setup_gb.py
-      - run: python -m pip install -r .runtime/gb/requirements.txt
+      - run: python -m pip install --require-hashes --only-binary=:all: -r requirements.lock
+      - run: python -m pip check
+      - run: python python/dependency_policy.py
+      - run: python scripts/install.py --workspace .test-output/install-smoke --install-deps --json-progress
+      - run: python scripts/install.py --workspace .test-output/install-smoke --check
       - run: npm run build:client
       - run: git diff --exit-code -- client.js
       - run: npm test

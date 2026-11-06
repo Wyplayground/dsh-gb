@@ -20,6 +20,11 @@ def export_model(root, storage, gb, run_dir, plan, args, contained, write_json):
     from gb_core.cli import load_stored_run
     from gb_core.contracts import TaskType
     from gb_core.artifacts import source_provenance
+    from dependency_policy import require_lock
+    environment = require_lock()
+    saved_lock = plan['data'].get('environment', {}).get('dependency_lock')
+    if not saved_lock or saved_lock['lock_sha256'] != environment['lock_sha256'] or saved_lock['packages'] != environment['packages']:
+        raise ValueError('Stored CV run uses a different Python environment; create a new plan before exporting.')
     if source_provenance(gb)['combined_sha256'] != plan['source_sha256']:
         raise ValueError('GB source changed since planning; cannot refit this stored run.')
     source = contained(root, plan['data']['path'])
@@ -39,6 +44,7 @@ def export_model(root, storage, gb, run_dir, plan, args, contained, write_json):
                   bundle_path=str(bundle), bundle_sha256=digest(bundle), manifest_path=str(export_manifest),
                   manifest_sha256=digest(export_manifest), feature_names=list(engine.feature_names),
                   task=plan['settings']['task'], gb_source_sha256=plan['source_sha256'],
+                  dependency_lock_sha256=environment['lock_sha256'], dependency_versions=environment['packages'],
                   validation_status=exported.validation_status, validation_error=exported.validation_error,
                   interpretation='Refitted on calibration data only. Viewing holdout before selecting compromises confirmatory use.')
     write_json(contained(storage, storage / 'models' / (model_id + '.json')), record)
@@ -63,6 +69,10 @@ def predict(root, storage, gb, args, contained, write_json):
     import pandas as pd
     from gb_core.artifacts import load_bundle, source_provenance
     record = model_record(storage, args['model_id'], contained)
+    from dependency_policy import require_lock
+    environment = require_lock()
+    if record.get('dependency_lock_sha256') != environment['lock_sha256'] or record.get('dependency_versions') != environment['packages']:
+        raise ValueError('Model runtime differs from its export environment; re-export under the pinned environment.')
     if source_provenance(gb)['combined_sha256'] != record['gb_source_sha256']:
         raise ValueError('GB source differs from the exported model runtime.')
     source = contained(root, root / args['path'])

@@ -1,7 +1,8 @@
 import { createHash } from 'node:crypto';
-import { realpath, readFile, writeFile, rename } from 'node:fs/promises';
+import { realpath, readFile, writeFile, rename, mkdir } from 'node:fs/promises';
 import { resolve, relative, isAbsolute, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
+import {within} from './paths.js';
 
 const worker = fileURLToPath(new URL('./python/worker.py', import.meta.url));
 export function scopeFor(agent) {
@@ -67,13 +68,26 @@ export async function startWorker(ctx, config, scope, op, args, signal, onEvent 
 
 export async function markInterrupted(config, scope, planId) {
   if (!/^[0-9a-f]{24}$/.test(planId)) return;
-  const folder = await realpath(join(config.workspaceRoot, '.dsh-gb', scope, 'runs', planId)).catch(() => null);
-  if (!folder) return;
-  const rel = relative(config.workspaceRoot, folder);
-  if (rel.startsWith('..') || isAbsolute(rel)) throw new Error('Run path escapes workspace');
+  if (!/^[a-zA-Z0-9_-]{1,80}$/.test(scope)) throw new Error('Invalid interruption scope.');
+  const storage=await realpath(join(config.workspaceRoot,'.dsh-gb',scope));
+  if(!within(config.workspaceRoot,storage)) throw new Error('Storage path escapes workspace.');
+  const planPath=await realpath(join(storage,'plans',planId+'.json'));
+  if(!within(storage,planPath)) throw new Error('Plan path escapes its storage scope.');
+  const plan=JSON.parse(await readFile(planPath,'utf8'));
+  if(plan.plan_id!==planId) throw new Error('Saved plan identifier does not match.');
+  const runs=join(storage,'runs');
+  await mkdir(runs).catch(error=>{if(error.code!=='EEXIST') throw error;});
+  if(!within(storage,await realpath(runs))) throw new Error('Run directory escapes its storage scope.');
+  await mkdir(join(runs,planId)).catch(error=>{if(error.code!=='EEXIST') throw error;});
+  const folder=await realpath(join(runs,planId));
+  if (!within(config.workspaceRoot,folder)) throw new Error('Run path escapes workspace');
   const path = join(folder, 'state.json');
+  const existing=await realpath(path).catch(()=>null);
+  if(existing&&!within(folder,existing)) throw new Error('State path escapes its run.');
   const old = JSON.parse(await readFile(path, 'utf8').catch(() => '{}'));
+  if(['completed','completed_with_errors'].includes(old.status)) return old.status;
   const tmp = path + '.cancel.tmp';
-  await writeFile(tmp, JSON.stringify({ ...old, status: 'interrupted', resumable: true }));
+  await writeFile(tmp, JSON.stringify({completed:0,total:plan.candidate_count,...old,status:'interrupted',resumable:true}));
   await rename(tmp, path);
+  return 'interrupted';
 }

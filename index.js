@@ -34,15 +34,17 @@ export function apply(ctx, config = {}) {
   }, (args,exec) => call('prepare',args,exec));
   register('gb_inspect_data', 'Start here for GB analysis. Check a workspace-relative or absolute dataset path directly; returns environment readiness, dataset metadata and supported methods. No shell, pwd, directory glob or raw-matrix read is needed.', selection,
     (args, exec) => call('inspect', args, exec));
-  register('gb_plan_analysis', 'Create a reproducible GB plan. Show the returned settings to the user before execution. Alpha: at most 32 candidates and 4 workers.', {
+  register('gb_plan_analysis', 'Create a reproducible GB plan. Show settings before execution. Custom plans allow 32 candidates; library=full explicitly selects all 990 combinations (15 preprocessing × 6 selectors × 11 models), which can be expensive. At most 4 workers. Full library coverage does not change exploration/standard/audit rigor.', {
     ...selection,
+    library:{type:'string',enum:['custom','full']},
     mode: { type: 'string', enum: ['exploration', 'standard', 'audit'] },
     ...Object.fromEntries(['preprocessing', 'selectors', 'models'].map(k => [k, { type: 'array', items: { type: 'string' } }])),
     ...Object.fromEntries(['outer_folds', 'inner_folds', 'seed', 'jobs'].map(k => [k, { type: 'integer' }])),
     validation_ratio: { type: 'number' },
   }, (args, exec) => call('plan', args, exec));
-  register('gb_read_results', 'Read saved GB status, bounded evidence, all result/plot paths and a presentation manifest. Present presentation.default_files (Markdown summary, CSV, diagnostic PNG) with the native present tool. No shell or glob is needed. HTML is supplementary. CV ordering is not proof of a universally best pipeline; Val_* is internal holdout.', planId,
+  register('gb_read_results', 'Read saved GB status, paged candidate evidence and a presentation manifest. Default 20 candidate rows; use candidate_offset/candidate_limit (at most 100) for larger libraries. Present default_files with the native present tool. CSV contains all rows. CV orders the declared library; Val_* is internal holdout.', {...planId,candidate_offset:{type:'integer'},candidate_limit:{type:'integer'}},
     async (args, exec) => {
+      if(args.candidate_limit>100) throw new Error('Conversation result pages support at most 100 candidates.');
       const value = await call('results', args, exec);
       const live = ctx.jobs.list(exec.agent.id).some(j => j.label === 'GB analysis ' + args.plan_id && ['running', 'stopping'].includes(j.status));
       if (value.state.status === 'running' && !live) value.state = { ...value.state, status: 'interrupted', resumable: true };
@@ -69,8 +71,10 @@ export function apply(ctx, config = {}) {
             } catch (error) {
               if (error.cleanupFailed) return { status: 'failed', detail: 'Process cleanup could not be verified: ' + error.message };
               if (controller.signal.aborted) {
-                try { await markInterrupted(conf, scope, args.plan_id); }
+                let state;
+                try { state=await markInterrupted(conf, scope, args.plan_id); }
                 catch (cleanup) { return { status: 'failed', detail: 'Could not record cancellation: ' + cleanup.message }; }
+                if(state!=='interrupted') return {status:'completed',detail:'Analysis finished before cancellation.'};
                 return { status: 'killed', detail: 'Interrupted; rerun the same plan to resume completed checkpoints.' };
               }
               return { status: 'failed', detail: error.message };

@@ -1,12 +1,16 @@
 import { Remote, TypertRemoteService } from '@deepseek-ai/dsh-typert-protocol';
 import { settings, startWorker, markInterrupted } from './bridge.js';
 import { randomUUID } from 'node:crypto';
+import {Bootstrap} from './bootstrap.js';
 
 /** Separate workbench storage; never reads arbitrary conversation scopes. */
 export class Workbench extends TypertRemoteService {
   static inject=['subprocess'];
   constructor(ctx,config) {
     super(ctx,'gbWorkbench'); this.config=config;
+    this.scope=config.scope||'workbench';
+    if(!/^[a-zA-Z0-9_-]{1,80}$/.test(this.scope)) throw new Error('Invalid GB storage scope.');
+    this.bootstrap=new Bootstrap(ctx);
     this.work=new Map();
     ctx.effect(()=>async()=>{
       this.closing=true;
@@ -18,9 +22,10 @@ export class Workbench extends TypertRemoteService {
   async call(op,args,signal) {
     signal?.throwIfAborted();
     if(this.closing) throw new Error('GB workbench is stopping.');
+    if(['install_start','install_status','install_cancel'].includes(op)) return this.bootstrap.call(op,args,signal);
     if (JSON.stringify(args).length > 1024*1024) throw new Error('Request exceeds 1 MiB.');
     if (!['status','files','columns','prepare','inspect','plan','start','jobs','cancel','results','history','export','models','predict','artifact'].includes(op)) throw new Error('Unsupported GB operation.');
-    const conf=await settings(this.config),scope='workbench';
+    const conf=await settings(this.config),scope=this.scope;
     const ownJobs=()=>[...this.work.values()].map(({id,label,status,progress,detail,startedAt,finishedAt})=>({id,label,status,...progress?{progress}:{},...detail?{detail}:{},startedAt,...finishedAt?{finishedAt}:{}}));
     if (op === 'jobs') return {jobs:ownJobs()};
     if (op === 'cancel') {
@@ -48,8 +53,9 @@ export class Workbench extends TypertRemoteService {
           } catch(error) {
             if (controller.signal.aborted && !error.cleanupFailed) {
               try {
-                await markInterrupted(conf,scope,args.plan_id);
-                job.status='killed';job.detail='Interrupted; resume the same plan.';
+                const state=await markInterrupted(conf,scope,args.plan_id);
+                job.status=state==='interrupted'?'killed':'completed';
+                job.detail=state==='interrupted'?'Interrupted; resume the same plan.':'Analysis finished before cancellation.';
               } catch(cleanup) {job.status='failed';job.detail=cleanup.message;}
             } else {
               job.status='failed';job.detail=error.message;

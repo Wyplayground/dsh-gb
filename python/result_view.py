@@ -3,6 +3,7 @@ import html
 import math
 from pathlib import Path
 from urllib.parse import quote
+from path_policy import inside
 
 
 def cell(value):
@@ -16,7 +17,7 @@ def cell(value):
 def build_result_view(run_dir, plan, state, summary, write_report):
     run_dir = Path(run_dir).resolve()
     def admitted(path):
-        return path.is_file() and path.resolve().is_relative_to(run_dir)
+        return path.is_file() and inside(run_dir, path.resolve())
 
     roots = [p for p in sorted(run_dir.iterdir()) if admitted(p) and p.suffix.lower() in ('.csv', '.html', '.json', '.joblib', '.md') and p.name != 'state.json']
     plots = [p for p in sorted((run_dir / 'plots').glob('*.png')) if admitted(p)]

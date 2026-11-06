@@ -1,8 +1,8 @@
 # dsh-gb
 
-Grand Banquet chemometrics tools for DeepSeek Harness. Alpha **0.2.0-alpha.1** targeting **DSH 0.2.2-rc.1**.
+Grand Banquet chemometrics tools for DeepSeek Harness. Alpha **0.3.0-alpha.1** targeting **DSH 0.2.2-rc.1**.
 
-This release adds a native **插件 → GB 工作台** panel: editable setup, file browsing, CSV/Excel sheet and column mapping, candidate filtering/comparison, verified model export and new-sample prediction. The optional **GB 分析** conversation mode and native Markdown/CSV/PNG cards remain available. See [0.2 changes and limits](docs/WORKBENCH_CHANGES.md).
+The native **插件 → GB 工作台** panel provides private-environment installation, file browsing, CSV/Excel column mapping, candidate comparison, verified model export and prediction. This release locks Python dependencies including wheel hashes, adds an explicit 990-candidate library and a local stdio MCP server. The optional **GB 分析** mode and native Markdown/CSV/PNG cards remain available. See [0.3 changes and acceptance](docs/V03_ACCEPTANCE.md) and [MCP setup](docs/MCP.md).
 
 This independent plugin wraps the existing GB Python engine. It does not replace its scientific methods or require a second DeepSeek API key. Raw data stays in the configured local workspace; model-facing results contain metadata and bounded result summaries. Harness receives the tool arguments, paths, settings and summaries, so these are part of the conversation context.
 
@@ -14,13 +14,14 @@ Requirements: Node.js compatible with DSH, Git, Python 3.10–3.13, and a workin
 git clone https://github.com/Wyplayground/dsh-gb.git
 cd dsh-gb
 npm install --ignore-scripts
-python scripts/install.py --workspace "D:/GB-analysis" --install-deps
 dsh plugin --profile web add ./
 ```
 
-The installer fetches the exact source revision from `gb.lock.json` and creates a private venv under `<workspace>/.dsh-gb/runtime/`; dependencies are installed there, never into system Python. It prints three configuration paths and saves them in `runtime/setup.json`. Open **插件 → GB 工作台**, paste those paths into the first section, save, then **检查环境**. Recheck a managed installation without downloads using `python scripts/install.py --workspace "D:/GB-analysis" --check`.
+Launch `dsh web`, open **插件 → GB 工作台**, enter an installation folder and choose **创建独立环境并安装 GB**. Review progress, then choose **使用此环境并检查**. The installer fetches the exact source revision from `gb.lock.json`, creates a private venv under `<workspace>/.dsh-gb/runtime/`, and installs every Python dependency from `requirements.lock` with exact versions, wheel hashes and no source builds. It does not modify system Python. Git and a Python 3.10–3.13 executable must already be available; the Python path field selects the base interpreter. Interrupted installation can be retried; **读取已有安装** recovers its saved configuration.
 
-If you already have a working GB environment, enter its Python and engine paths directly. The older `scripts/setup_gb.py` remains available for development and explicit reuse of an existing environment. No model credentials are copied or written by either installer.
+The equivalent command is `python scripts/install.py --workspace "D:/GB-analysis" --install-deps`. Recheck without downloads using `python scripts/install.py --workspace "D:/GB-analysis" --check`. Both CLI and UI use the same installer. A plugin update that changes the native RPC contract requires restarting Harness and refreshing the page before using new controls.
+
+An existing environment must match this release's dependency lock before preparing data, planning, running, exporting or predicting. Read-only inspection and old results remain available. Plans and models record their dependency lock and package versions; an old unlocked model must be recreated and exported from a new compatible plan. The older `scripts/setup_gb.py` remains available for development. No model credentials are copied or written by either installer.
 
 Alternatively, override the `gb` row in the web profile's user `cordis.patch.yml` (replace all example paths):
 
@@ -40,7 +41,7 @@ No TypeScript build or installation-time code execution is required: the native 
 
 1. Check the environment, browse a workspace folder, and choose a CSV/Excel file. For Excel, choose the sheet. Column metadata is shown without displaying the raw matrix.
 2. Choose classification/regression, the target, optional sample ID, and any Group/Split columns. Select numeric predictors explicitly and review the mapping. **确认映射并检查数据** creates a copy, records the source SHA-256 and mapping, and reports excluded target rows. Input files are never overwritten.
-3. Select methods and folds, generate a plan, review it, then start it. Live runs can be stopped; history offers checkpoint resume after interruption.
+3. Choose custom methods (up to 32 combinations) or **全部 990 候选**, select folds, generate a plan, review it, then start it. The full library is 15 preprocessing × 6 selectors × 11 models for the chosen task; it can take substantially longer. Library size and evaluation mode are separate choices. Live runs can be stopped; history offers checkpoint resume after interruption.
 4. Filter candidates, sort display metrics, and check multiple candidates for side-by-side evidence. This does not rewrite stored ranking. Download CSV/Markdown or display diagnostic PNG directly in the native panel, without an HTML iframe.
 5. Export an eligible candidate by its exact Pipeline_ID, then select the exported model and new-sample file. Match every training feature to its input column, generate predictions, and download the CSV. Extra columns are listed explicitly; no predictive-accuracy claim is made without independent labels.
 
@@ -63,7 +64,7 @@ Plans and runs are stored under `<workspaceRoot>/.dsh-gb/<session-hash>/`. The s
 
 ## Alpha boundaries
 
-- At most 32 candidates and 1–4 workers per plan; up to four concurrent workbench runs. Full 990-candidate workflows and MCP remain deferred.
+- Custom plans allow at most 32 candidates; explicit full-library plans enumerate exactly 990. Both allow 1–4 workers and at most four concurrent workbench runs. Results retain failed candidates explicitly; conversation/MCP pages contain at most 100 rows and report total/offset, while the local CSV contains all rows.
 - Interactive import supports CSV/XLSX/XLS up to 128 MiB and 20,000 columns. Directory browsing shows at most 200 entries per folder. Browser artifact downloads are capped at 8 MiB; larger artifacts remain available at their recorded local path. Prediction requires every original predictor, even when a selector later reduces them.
 - Bundle hashes and workspace confinement detect ordinary artifact changes; they are not signatures or protection against a malicious local user able to rewrite both model and registry. Joblib models are trusted-code artifacts. Only plugin-created registered bundles are loaded.
 - Source and data paths must resolve inside configured boundaries; outputs stay in the analysis workspace. This is local path validation, not OS isolation against concurrent filesystem mutation. DSH's active tool permission policy still applies.
@@ -76,7 +77,9 @@ Plans and runs are stored under `<workspaceRoot>/.dsh-gb/<session-hash>/`. The s
 ```powershell
 npm ci --ignore-scripts
 python scripts/setup_gb.py
-python -m pip install -r .runtime/gb/requirements.txt
+python -m pip install --require-hashes --only-binary=:all: -r requirements.lock
+python -m pip check
+python python/dependency_policy.py
 npm test
 python -m unittest discover -s tests -p test_*.py -v
 npm run build:client
@@ -89,6 +92,6 @@ Workbench tests exercise arbitrary/duplicate column names, Excel sheet selection
 
 The native runtime test uses DSH's actual local subprocess provider, cancels a multi-process analysis, verifies process-range cleanup, then resumes its checkpoints. Local checks passed on Windows with Python 3.13 and DSH 0.2.2-rc.1. Real model-driven classification and regression workflows were also exercised through the Harness Web UI on 2026-11-06: inspection, displayed plans, background jobs, result reading, native file cards, CSV previews and PNG previews worked. HTML file cards were delivered, but the HTML sidebar preview remained blank in the tested in-app browser. The first generic Windows shell call also encountered a host ACL error; GB tools worked and the regression workflow completed without shell calls. See the [UI validation record](docs/UI_VALIDATION_2026-11-06.md) for the exact scope and remaining issues.
 
-`.github/workflows/test.yml` runs the plugin and Python integration checks on Windows and Linux. See the repository's Actions tab for the result of each commit; local Windows verification and remote CI results are separate evidence.
+`.github/workflows/test.yml` runs six combinations: Windows, Linux and macOS with Python 3.10 and 3.13, including a fresh private installation. See [Actions](https://github.com/Wyplayground/dsh-gb/actions) for each commit's actual result; local UI evidence is Windows-only. Python 3.11/3.12 are accepted by the lock and installer but are not separate CI matrix entries. Dependency updates are explicit maintainer changes through `scripts/lock_dependencies.py`; ordinary installation never regenerates the lock.
 
 Apache-2.0; see LICENSE. GB remains a separate Apache-2.0 project at the pinned upstream revision. DSH is a separate MIT-licensed host. Test outputs, environments, credentials and scientific datasets are excluded from this repository.

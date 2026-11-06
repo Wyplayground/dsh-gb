@@ -6,6 +6,14 @@ import { Context } from '@deepseek-ai/cordis';
 import { ToolsService, defineTool } from '@deepseek-ai/dsh-tools';
 import { createScope, scopeTarget } from '@deepseek-ai/dsh-scope';
 import { apply as applyMode, GB_TOOL_NAMES } from '../mode.js';
+import {within} from '../paths.js';
+
+test('Windows extended path aliases preserve boundaries in native cleanup',()=>{
+  assert.equal(within('C:\\workspace','\\\\?\\C:\\workspace\\run','win32'),true);
+  assert.equal(within('\\\\server\\share\\workspace','\\\\?\\UNC\\server\\share\\workspace\\run','win32'),true);
+  assert.equal(within('C:\\workspace','C:\\workspace-other\\run','win32'),false);
+  assert.equal(within('C:\\workspace','D:\\workspace\\run','win32'),false);
+});
 
 test('real Harness registry accepts all GB schemas', async () => {
   const ctx = new Context();
