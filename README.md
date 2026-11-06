@@ -67,6 +67,6 @@ Python integration tests generate synthetic data and compare both classification
 
 The native runtime test uses DSH's actual local subprocess provider, cancels a multi-process analysis, verifies process-range cleanup, then resumes its checkpoints. All local checks passed on Windows with Python 3.13 and DSH 0.2.2-rc.1. Browser/model-driven end-to-end interaction has not yet been validated.
 
-`ci/github-actions-test.yml` is a prepared Windows/Linux workflow. It is not active: the publishing GitHub OAuth credential lacks the `workflow` scope. Enable it later by placing it at `.github/workflows/test.yml` with an appropriately authorized account. Linux CI has not yet run.
+`.github/workflows/test.yml` runs the plugin and Python integration checks on Windows and Linux. See the repository's Actions tab for the result of each commit; local Windows verification and remote CI results are separate evidence.
 
 Apache-2.0; see LICENSE. GB remains a separate Apache-2.0 project at the pinned upstream revision. DSH is a separate MIT-licensed host. Test outputs, environments, credentials and scientific datasets are excluded from this repository.
